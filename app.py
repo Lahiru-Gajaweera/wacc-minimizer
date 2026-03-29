@@ -64,3 +64,14 @@ if 'mkt_cap' in st.session_state:
         fig, ax = plt.subplots()
         ax.plot(ratios, wacc_list, label="WACC Curve", color='blue')
         st.pyplot(fig)
+
+        # Create a CSV version of the data
+csv = data_df.to_csv(index=False).encode('utf-8')
+
+# Add a download button
+st.download_button(
+    label="📥 Download Market Data as CSV",
+    data=csv,
+    file_name=f"{st.session_state['ticker']}_market_data.csv",
+    mime="text/csv",
+)
