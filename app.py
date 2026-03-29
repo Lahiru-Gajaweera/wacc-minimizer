@@ -68,10 +68,25 @@ if 'mkt_cap' in st.session_state:
         # Create a CSV version of the data
 csv = data_df.to_csv(index=False).encode('utf-8')
 
-# Add a download button
-st.download_button(
-    label="📥 Download Market Data as CSV",
-    data=csv,
-    file_name=f"{st.session_state['ticker']}_market_data.csv",
-    mime="text/csv",
-)
+# Check if the data has been loaded before showing the button
+if 'mkt_cap' in st.session_state:
+    # Re-create the dataframe so the button can "see" it
+    data_df = pd.DataFrame({
+        "Metric": ["Market Cap", "Total Debt", "Beta (Risk)"],
+        "Value": [
+            f"${st.session_state['mkt_cap']:,.0f}", 
+            f"${st.session_state['total_debt']:,.0f}", 
+            st.session_state['beta']
+        ]
+    })
+    
+    # 1. Create the CSV
+    csv_data = data_df.to_csv(index=False).encode('utf-8')
+
+    # 2. Show the button
+    st.download_button(
+        label="📥 Download Market Data as CSV",
+        data=csv_data,
+        file_name=f"{st.session_state['ticker']}_market_data.csv",
+        mime="text/csv",
+    )
