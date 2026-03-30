@@ -3,28 +3,43 @@ import yfinance as yf
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import plotly.express as px
 from fpdf import FPDF
-import io
+import tempfile
+import os
 
-# --- 1. Page Config ---
+# --- 1. Page Config & Custom Blue CSS ---
 st.set_page_config(page_title="Executive WACC Optimizer", layout="wide")
+
+# Applying a subtle blue theme to the sidebar and buttons
+st.markdown("""
+    <style>
+    .stButton>button {
+        background-color: #003366;
+        color: white;
+        border-radius: 5px;
+    }
+    .stMetric {
+        background-color: #f0f5f9;
+        padding: 15px;
+        border-radius: 10px;
+        border-left: 5px solid #003366;
+    }
+    </style>
+    """, unsafe_allow_stdio=True)
+
 st.title("🏛️ Strategic Capital Structure & WACC Optimizer")
 st.markdown("---")
 
-# --- 2. Sidebar: Data & Assumptions ---
+# --- 2. Sidebar: Data Acquisition ---
 st.sidebar.header("📂 Data Acquisition")
 source = st.sidebar.radio("Data Source", ["Live API", "Manual CSV Upload"])
 
 if 'fin_data' not in st.session_state:
     st.session_state['fin_data'] = None
 
-# --- LIVE API SECTION ---
 if source == "Live API":
-    st.sidebar.subheader("Select or Type Ticker")
-    preset = st.sidebar.selectbox("Quick Load", ["Custom", "AAPL", "TSLA", "GOOGL", "MSFT", "NVDA", "AMZN"])
+    preset = st.sidebar.selectbox("Quick Load", ["Custom", "AAPL", "TSLA", "GOOGL", "MSFT", "NVDA"])
     ticker_input = st.sidebar.text_input("Ticker Symbol", value="" if preset == "Custom" else preset).upper()
-    
     if st.sidebar.button("🔍 Fetch Market Data"):
         try:
             s = yf.Ticker(ticker_input); i = s.info
@@ -34,8 +49,6 @@ if source == "Live API":
                 'name': i.get('longName', ticker_input)
             }
         except: st.sidebar.error("Ticker not found.")
-
-# --- MANUAL CSV SECTION ---
 else:
     u = st.sidebar.file_uploader("Upload CSV", type=["csv"])
     if u:
@@ -44,8 +57,8 @@ else:
         c2 = st.sidebar.selectbox("Debt Column", df.columns)
         if st.sidebar.button("🚀 Analyze Data"):
             st.session_state['fin_data'] = {
-                'ticker': "Manual", 'mkt_cap': float(df[c1].iloc[0]), 
-                'total_debt': float(df[c2].iloc[0]), 'beta': 1.1, 'name': "Manual Upload"
+                'ticker': "Analysis", 'mkt_cap': float(df[c1].iloc[0]), 
+                'total_debt': float(df[c2].iloc[0]), 'beta': 1.1, 'name': "Financial Portfolio"
             }
 
 # --- 3. Main Dashboard ---
@@ -54,6 +67,7 @@ if st.session_state['fin_data']:
     
     # Financial Assumptions
     st.sidebar.markdown("---")
+    st.sidebar.subheader("⚙️ Model Parameters")
     tax = st.sidebar.slider("Tax Rate (%)", 0, 40, 25) / 100
     rf = st.sidebar.number_input("Risk-Free Rate", value=0.043)
     erp = st.sidebar.slider("Equity Risk Premium (%)", 3, 9, 5) / 100
@@ -77,81 +91,84 @@ if st.session_state['fin_data']:
     curr_wacc = wacc_list[np.abs(ratios - curr_dr).argmin()]
     val_gain = ((1/min_w) - (1/curr_wacc)) / (1/curr_wacc)
 
-    # 1. Dashboard Metrics
-    st.header(f"Analysis: {d['name']}")
+    # Dashboard Metrics
+    st.header(f"Strategic Report: {d['name']}")
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Current WACC", f"{curr_wacc:.2%}")
     m2.metric("Optimal WACC", f"{min_w:.2%}")
     m3.metric("Target Debt Ratio", f"{opt_r:.1%}")
     m4.metric("Value Potential", f"{val_gain:+.2%}")
     
-    # 2. Charts
-    st.markdown("---")
-    st.subheader("WACC Minimization Analysis")
-    fig, ax = plt.subplots(figsize=(10, 3.5))
-    ax.plot(ratios, wacc_list, color='#0077b6', linewidth=2.5)
-    ax.axvline(curr_dr, color='orange', linestyle='--', label="Current")
-    ax.axvline(opt_r, color='green', label="Optimal")
-    ax.legend(); st.pyplot(fig)
+    # CHARTS (Shared for Screen and PDF)
+    # WACC Curve
+    fig_curve, ax_curve = plt.subplots(figsize=(10, 4))
+    ax_curve.plot(ratios, wacc_list, color='#004d99', linewidth=3, label="Cost of Capital")
+    ax_curve.axvline(curr_dr, color='#ff9900', linestyle='--', label="Current Mix")
+    ax_curve.axvline(opt_r, color='#33cc33', linewidth=2, label="Optimal Target")
+    ax_curve.set_facecolor('#f4f7f9')
+    ax_curve.set_title("WACC Minimization Analysis", color='#003366', fontweight='bold')
+    ax_curve.legend()
+    st.pyplot(fig_curve)
 
-    st.plotly_chart(px.pie(pd.DataFrame({"S": ["Equity", "Debt"], "V": [d['mkt_cap'], d['total_debt']]}), 
-                           values='V', names='S', hole=0.5, title="Current Capital Mix"), use_container_width=True)
+    # Pie Chart
+    fig_pie, ax_pie = plt.subplots(figsize=(6, 4))
+    ax_pie.pie([d['mkt_cap'], d['total_debt']], labels=['Equity', 'Debt'], 
+               autopct='%1.1f%%', colors=['#003366', '#6699cc'], startangle=140, explode=(0.05, 0))
+    ax_pie.set_title("Current Capital Composition", color='#003366', fontweight='bold')
+    st.pyplot(fig_pie)
 
-    # 3. Strategy Roadmap (Description Mode)
+    # Strategy Roadmap
     st.markdown("---")
-    st.header("📜 Strategic Execution Roadmap")
     gap = opt_r - curr_dr
-    
-    strategy_text = ""
     if gap > 0.05:
-        status = "UNDER-LEVERAGED"
-        st.success(f"### {status}")
-        strategy_text = "The firm should increase leverage to capture tax shields and lower cost of capital."
-        dos = "DO: Issue long-term bonds, initiate share buybacks, and optimize interest tax shields."
-        donts = "DON'T: Issue new equity or maintain high cash balances that dilute Return on Equity (ROE)."
+        status, desc = "UNDER-LEVERAGED", "The firm should increase leverage to capture interest tax shields."
+        dos = "Issue long-term debt, initiate share buybacks, and optimize capital structure for tax efficiency."
+        donts = "Avoid new equity issuance or maintaining excessive cash reserves."
     elif gap < -0.05:
-        status = "OVER-LEVERAGED"
-        st.warning(f"### {status}")
-        strategy_text = "The firm is over-leveraged. High financial risk is driving up the cost of equity."
-        dos = "DO: De-leverage via equity infusion, sell non-core assets, and focus on debt repayment."
-        donts = "DON'T: Take on new variable-rate debt or engage in aggressive debt-funded acquisitions."
+        status, desc = "OVER-LEVERAGED", "The firm's high debt load is driving up financial distress costs."
+        dos = "Raise equity capital, divest non-core assets, and focus on debt reduction."
+        donts = "Engage in new debt-funded acquisitions or use variable-rate financing."
     else:
-        status = "OPTIMAL"
-        st.info(f"### {status}")
-        strategy_text = "Operating at peak efficiency. No structural changes required."
-        dos = "DO: Focus on operational growth."; donts = "DON'T: Change the capital mix."
+        status, desc = "OPTIMAL", "Operating at peak financial efficiency."
+        dos = "Focus on operational growth and cost control."; donts = "Alter the capital weights."
 
-    st.write(f"**Action Plan:** {strategy_text}")
-    st.write(f"✅ **Strategic Do's:** {dos}")
-    st.write(f"❌ **Strategic Don'ts:** {donts}")
+    st.write(f"**Strategic Status:** {status}")
+    st.write(f"**Analysis:** {desc}")
+    st.write(f"✅ **Do's:** {dos}")
+    st.write(f"❌ **Don'ts:** {donts}")
 
-    # 4. Advanced PDF Generator
-    def generate_full_pdf(d, cw, mw, orat, stat, desc, d1, d2):
+    # --- BLUE THEMED PDF GENERATOR ---
+    def generate_full_pdf(d, cw, mw, orat, stat, desc, d1, d2, f_curve, f_pie):
         pdf = FPDF()
         pdf.add_page()
-        pdf.set_font("Arial", 'B', 18)
-        pdf.cell(200, 15, f"Financial Analysis Report: {d['name']}", ln=True, align='C')
-        pdf.set_font("Arial", 'B', 12)
-        pdf.ln(10)
-        pdf.cell(0, 10, f"Ticker: {d['ticker']} | Market Cap: ${d['mkt_cap']:,.0f}", ln=True)
-        pdf.ln(5)
-        pdf.set_font("Arial", '', 11)
-        pdf.cell(100, 10, f"Current WACC: {cw:.2%}")
-        pdf.cell(100, 10, f"Target Optimal WACC: {mw:.2%}", ln=True)
-        pdf.cell(100, 10, f"Current Debt Ratio: {curr_dr:.1%}")
-        pdf.cell(100, 10, f"Optimal Debt Ratio: {orat:.1%}", ln=True)
-        pdf.ln(10); pdf.set_font("Arial", 'B', 14)
-        pdf.cell(0, 10, f"Strategic Status: {stat}", ln=True)
-        pdf.set_font("Arial", '', 11)
-        pdf.multi_cell(0, 10, f"Analysis: {desc}")
-        pdf.ln(5)
-        pdf.set_text_color(0, 128, 0) # Green
-        pdf.multi_cell(0, 10, f"Recommended Actions: {d1}")
-        pdf.set_text_color(255, 0, 0) # Red
-        pdf.multi_cell(0, 10, f"Risk Warnings: {d2}")
-        return pdf.output(dest='S').encode('latin-1')
+        
+        # Header Box
+        pdf.set_fill_color(0, 51, 102) # Dark Blue
+        pdf.rect(0, 0, 210, 40, 'F')
+        pdf.set_text_color(255, 255, 255)
+        pdf.set_font("Arial", 'B', 20)
+        pdf.cell(190, 20, f"EXECUTIVE STRATEGY REPORT", ln=True, align='C')
+        pdf.set_font("Arial", '', 12)
+        pdf.cell(190, 10, f"{d['name']} ({d['ticker']})", ln=True, align='C')
+        
+        pdf.set_text_color(0, 0, 0)
+        pdf.ln(20)
 
-    st.markdown("---")
-    if st.button("📥 Download Comprehensive Analysis (PDF)"):
-        pdf_out = generate_full_pdf(d, curr_wacc, min_w, opt_r, status, strategy_text, dos, donts)
-        st.download_button("Click to Download PDF", pdf_out, f"WACC_Analysis_{d['ticker']}.pdf", "application/pdf")
+        # Metrics
+        pdf.set_font("Arial", 'B', 14)
+        pdf.set_text_color(0, 51, 102)
+        pdf.cell(0, 10, "1. Key Financial Indicators", ln=True)
+        pdf.set_font("Arial", '', 11)
+        pdf.set_text_color(0, 0, 0)
+        pdf.cell(95, 10, f"Current WACC: {cw:.2%}", border='B')
+        pdf.cell(95, 10, f"Optimal WACC: {mw:.2%}", border='B', ln=True)
+        pdf.cell(95, 10, f"Current Debt Ratio: {curr_dr:.1%}", border='B')
+        pdf.cell(95, 10, f"Optimal Debt Ratio: {orat:.1%}", border='B', ln=True)
+        
+        # Roadmap
+        pdf.ln(10)
+        pdf.set_font("Arial", 'B', 14)
+        pdf.set_text_color(0, 51, 102)
+        pdf.cell(0, 10, f"2. Strategic Roadmap: {stat}", ln=True)
+        pdf.set_font("Arial", '', 11)
+        pdf.
