@@ -80,91 +80,24 @@ if st.session_state['fin_data']:
     m3.metric("Target Debt Ratio", f"{opt_r:.1%}")
     m4.metric("Value Potential", f"{val_gain:+.2%}")
     
-    # CHARTS (Shared for Screen and PDF)
-    # WACC Curve
-    fig_curve, ax_curve = plt.subplots(figsize=(10, 4))
-    ax_curve.plot(ratios, wacc_list, color='#0077b6', linewidth=2.5)
-    ax_curve.axvline(curr_dr, color='orange', linestyle='--', label="Current")
-    ax_curve.axvline(opt_r, color='green', label="Optimal")
-    ax_curve.set_title("WACC Minimization Curve")
-    ax_curve.legend()
-    st.pyplot(fig_curve)
-
-    # Pie Chart
-    fig_pie, ax_pie = plt.subplots(figsize=(6, 4))
-    ax_pie.pie([d['mkt_cap'], d['total_debt']], labels=['Equity', 'Debt'], autopct='%1.1f%%', colors=['#1f77b4', '#d62728'], startangle=140)
-    ax_pie.set_title("Capital Structure Mix")
-    st.pyplot(fig_pie)
-
-    # Strategy Roadmap
+    # --- CHARTS SECTION (Side-by-Side Layout) ---
     st.markdown("---")
-    gap = opt_r - curr_dr
-    if gap > 0.05:
-        status, desc = "UNDER-LEVERAGED", "The firm should increase leverage to capture tax shields."
-        dos = "Issue long-term bonds, initiate share buybacks, and optimize interest tax shields."
-        donts = "Issue new equity or maintain high cash balances that dilute ROE."
-    elif gap < -0.05:
-        status, desc = "OVER-LEVERAGED", "The firm is over-leveraged; high financial risk is driving up costs."
-        dos = "De-leverage via equity infusion, sell non-core assets, and focus on debt repayment."
-        donts = "Take on new variable-rate debt or engage in aggressive debt-funded acquisitions."
-    else:
-        status, desc = "OPTIMAL", "Operating at peak efficiency."
-        dos = "Focus on operational growth."; donts = "Change the capital mix."
+    col_curve, col_pie = st.columns([2.5, 1]) # 2.5x width for curve, 1x for pie (makes pie smaller)
 
-    st.write(f"**Action Plan:** {desc}")
-    st.write(f"✅ **Do's:** {dos}")
-    st.write(f"❌ **Don'ts:** {donts}")
+    with col_curve:
+        # WACC Curve
+        fig_curve, ax_curve = plt.subplots(figsize=(8, 4))
+        ax_curve.plot(ratios, wacc_list, color='#0077b6', linewidth=2.5)
+        ax_curve.axvline(curr_dr, color='orange', linestyle='--', label="Current")
+        ax_curve.axvline(opt_r, color='green', label="Optimal")
+        ax_curve.set_title("WACC Minimization Curve", color="w" if st.get_option("theme.base") == "dark" else "black")
+        ax_curve.legend()
+        fig_curve.patch.set_alpha(0.0)
+        ax_curve.patch.set_alpha(0.0)
+        st.pyplot(fig_curve, transparent=True)
 
-    # --- ADVANCED PDF GENERATOR ---
-    def generate_full_pdf(d, cw, mw, orat, stat, desc, d1, d2, f_curve, f_pie):
-        pdf = FPDF()
-        pdf.add_page()
+    with col_pie:
+        # Pie Chart (Shrunk to fit column)
+        fig_pie, ax_pie = plt.subplots(figsize=(3, 3)) # Reduced base size
         
-        # Heading
-        pdf.set_font("Arial", 'B', 18)
-        pdf.cell(200, 15, f"Strategic Analysis: {d['name']}", ln=True, align='C')
-        pdf.set_font("Arial", '', 11)
-        pdf.cell(0, 10, f"Ticker/Reference: {d['ticker']}", ln=True, align='C')
-        pdf.ln(5)
-
-        # Metrics Table
-        pdf.set_font("Arial", 'B', 12)
-        pdf.cell(0, 10, "1. Executive Summary Metrics", ln=True)
-        pdf.set_font("Arial", '', 11)
-        pdf.cell(95, 10, f"Current WACC: {cw:.2%}", border=1)
-        pdf.cell(95, 10, f"Optimal WACC: {mw:.2%}", border=1, ln=True)
-        pdf.cell(95, 10, f"Current Debt Ratio: {curr_dr:.1%}", border=1)
-        pdf.cell(95, 10, f"Target Debt Ratio: {orat:.1%}", border=1, ln=True)
-        
-        # Strategy Section
-        pdf.ln(10)
-        pdf.set_font("Arial", 'B', 12)
-        pdf.cell(0, 10, f"2. Strategic Roadmap: {stat}", ln=True)
-        pdf.set_font("Arial", '', 11)
-        pdf.multi_cell(0, 8, f"Analysis: {desc}")
-        pdf.ln(2)
-        pdf.multi_cell(0, 8, f"Action Plan: {d1}")
-        pdf.multi_cell(0, 8, f"Risks to Avoid: {d2}")
-
-        # Adding Images
-        with tempfile.TemporaryDirectory() as tmpdir:
-            curve_path = os.path.join(tmpdir, "curve.png")
-            pie_path = os.path.join(tmpdir, "pie.png")
-            f_curve.savefig(curve_path, bbox_inches='tight')
-            f_pie.savefig(pie_path, bbox_inches='tight')
-            
-            pdf.ln(5)
-            pdf.cell(0, 10, "3. Visual Data Analysis", ln=True)
-            pdf.image(curve_path, x=15, w=180)
-            pdf.ln(5)
-            pdf.image(pie_path, x=60, w=90)
-            
-        return pdf.output(dest='S').encode('latin-1')
-
-    st.markdown("---")
-    if st.button("📥 Download Final Report (PDF)"):
-        pdf_out = generate_full_pdf(d, curr_wacc, min_w, opt_r, status, desc, dos, donts, fig_curve, fig_pie)
-        st.download_button("Click to Download", pdf_out, f"Report_{d['ticker']}.pdf", "application/pdf")
-
-else:
-    st.info("👈 Load a ticker or upload data to begin.")
+        #
