@@ -9,7 +9,7 @@ import os
 
 # --- 1. Page Config & Setup ---
 st.set_page_config(page_title="Strategic WACC Optimizer", layout="wide")
-st.title("🏛️ Strategic Capital Structure & WACC Optimizer")
+st.title("Strategic Capital Structure & WACC Optimizer")
 
 # Initialize session state for data persistence
 if 'fin_data' not in st.session_state:
