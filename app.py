@@ -6,12 +6,12 @@ import matplotlib.pyplot as plt
 import plotly.express as px
 
 # --- 1. Page Config ---
-st.set_page_config(page_title="Executive WACC Optimizer", layout="wide")
-st.title("🛡️ Strategic Capital Structure & WACC Optimizer")
+st.set_page_config(page_title="Executive WACC Suite", layout="wide")
+st.title("🏛️ Strategic Capital structure & WACC Optimizer")
 st.markdown("---")
 
-# --- 2. Sidebar: Data & Global Assumptions ---
-st.sidebar.header("📂 Data Acquisition")
+# --- 2. Sidebar: Controls ---
+st.sidebar.header("📂 Data & Controls")
 source = st.sidebar.radio("Data Source", ["Live API", "Manual CSV"])
 
 if 'fin_data' not in st.session_state:
@@ -32,7 +32,7 @@ else:
         df = pd.read_csv(u)
         c1 = st.sidebar.selectbox("Mkt Cap Col", df.columns)
         c2 = st.sidebar.selectbox("Debt Col", df.columns)
-        if st.sidebar.button("Analyze"):
+        if st.sidebar.button("Analyze Data"):
             st.session_state['fin_data'] = {'ticker': "Upload", 'mkt_cap': float(df[c1].iloc[0]), 
                                             'total_debt': float(df[c2].iloc[0]), 'beta': 1.1, 'name': "Manual Dataset"}
 
@@ -56,8 +56,7 @@ if st.session_state['fin_data']:
     ratios = np.linspace(0.01, 0.9, 100)
     wacc_list = []
     for r in ratios:
-        # Dynamic Rd (Increases as debt ratio increases)
-        dynamic_rd = base_rd + (r * 0.12) 
+        dynamic_rd = base_rd + (r * 0.12) # Risk premium for high leverage
         lb = unlevered_b * (1 + (1 - tax) * (r / (1 - r)))
         re = rf + (lb * erp)
         wacc = ((1 - r) * re) + (r * dynamic_rd * (1 - tax))
@@ -68,87 +67,98 @@ if st.session_state['fin_data']:
     curr_wacc = wacc_list[np.abs(ratios - curr_dr).argmin()]
     potential_gain = ((1/min_w) - (1/curr_wacc)) / (1/curr_wacc) if curr_wacc > 0 else 0
 
-    # SECTION 1: High Level Metrics
-    st.header("📍 Current vs. Optimal Performance")
+    # SECTION 1: Key Performance Indicators
+    st.header("📍 Executive Summary")
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Current WACC", f"{curr_wacc:.2%}")
-    m2.metric("Optimal WACC", f"{min_w:.2%}")
+    m2.metric("Target Min WACC", f"{min_w:.2%}")
     m3.metric("Optimal Debt Ratio", f"{opt_r:.1%}")
-    m4.metric("Value Creation Potential", f"{potential_gain:+.2%}", delta_color="normal")
+    m4.metric("Value Creation Gain", f"{potential_gain:+.2%}")
     st.markdown("---")
 
-    # SECTION 2: Visualization Grid
-    st.header("📊 Analytical Overviews")
-    left_plot, right_plot = st.columns(2)
-    
-    with left_plot:
-        st.subheader("WACC Minimization Curve")
-        fig, ax = plt.subplots(figsize=(10, 6))
-        ax.plot(ratios, wacc_list, color='#0077b6', linewidth=3)
-        ax.axvline(curr_dr, color='orange', linestyle='--', label=f"Current: {curr_dr:.1%}")
-        ax.axvline(opt_r, color='green', label=f"Optimal: {opt_r:.1%}")
-        ax.set_facecolor('#f0f2f6')
-        ax.legend()
-        st.pyplot(fig)
+    # SECTION 2: Optimization Curve (Full Width)
+    st.subheader("📈 WACC Minimization Curve")
+    fig, ax = plt.subplots(figsize=(12, 5))
+    ax.plot(ratios, wacc_list, color='#0077b6', linewidth=3)
+    ax.fill_between(ratios, wacc_list, alpha=0.1, color='#0077b6')
+    ax.axvline(curr_dr, color='orange', linestyle='--', label=f"Current Structure: {curr_dr:.1%}")
+    ax.axvline(opt_r, color='green', label=f"Optimal Structure: {opt_r:.1%}")
+    ax.set_ylabel("Weighted Average Cost of Capital (%)")
+    ax.set_xlabel("Debt-to-Capital Ratio")
+    ax.set_facecolor('#f8f9fa')
+    ax.legend()
+    st.pyplot(fig)
 
-    with right_plot:
-        st.subheader("Current Capital Mix")
+    # SECTION 3: Capital Mix (Now Under the Curve)
+    st.markdown("---")
+    st.subheader("📊 Current Capital Composition")
+    pie_col1, pie_col2 = st.columns([1, 1.5])
+    with pie_col1:
         pie_df = pd.DataFrame({"Source": ["Equity", "Debt"], "Value": [d['mkt_cap'], d['total_debt']]})
         st.plotly_chart(px.pie(pie_df, values='Value', names='Source', hole=0.5, 
                                color_discrete_sequence=['#1f77b4', '#d62728']), use_container_width=True)
-    st.markdown("---")
+    with pie_col2:
+        st.write("### Structure Breakdown")
+        st.info(f"""
+        - **Total Enterprise Value:** ${total_val:,.0f}
+        - **Equity Weight:** {(1-curr_dr):.1%} (${d['mkt_cap']:,.0f})
+        - **Debt Weight:** {curr_dr:.1%} (${d['total_debt']:,.0f})
+        """)
+        st.write("The current mix reflects the company's existing financing strategy. The goal of this analysis is to shift these weights to reach the 'Green Line' shown in the curve above.")
 
-    # SECTION 3: Strategic Roadmap (Roadmap Description)
+    # SECTION 4: Advanced Strategic Advice
+    st.markdown("---")
     st.header("📜 Strategic Execution Roadmap")
     gap = opt_r - curr_dr
     
-    with st.container():
-        if gap > 0.05:
-            st.success("### RECOMMENDATION: CAPITAL RESTRUCTURING (DEBT INCREASE)")
-            st.write(f"The company is currently **Under-leveraged**. You are financing too much with expensive Equity and losing the **Tax Shield** benefits of Debt.")
-            c_do, c_dont = st.columns(2)
-            with c_do:
-                st.markdown("#### ✅ **Strategic Actions (Do's)**")
-                st.markdown("- **Issue Low-Cost Bonds:** Take advantage of the current interest rate environment to lock in long-term debt.")
-                st.markdown("- **Share Repurchase Program:** Use debt proceeds to buy back shares. This reduces the number of shares outstanding and increases Earnings Per Share (EPS).")
-                st.markdown("- **Optimize Tax Position:** Ensure that debt is placed in jurisdictions with the highest corporate tax rates to maximize the tax shield.")
-            with c_dont:
-                st.markdown("#### ❌ **Strategic Warnings (Don'ts)**")
-                st.markdown("- **Avoid New Equity Issuance:** Selling more shares now will dilute existing owners and increase the weighted average cost of capital.")
-                st.markdown("- **Do Not Hold Excess Cash:** Idle cash with low debt levels is a signal to markets that management is not optimizing capital efficiency.")
+    if gap > 0.05:
+        st.success("### STATUS: UNDER-LEVERAGED (SUB-OPTIMAL VALUE)")
+        st.markdown(f"**Analysis:** The firm is operating with excessive equity. Since equity is more expensive than debt, the overall cost of capital is too high. You are currently missing out on an estimated **{potential_gain:.2%}** increase in firm value.")
+        
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("#### ✅ **STRATEGIC DO'S (Action Plan)**")
+            st.write("1. **Recapitalization:** Issue long-term corporate bonds and use the proceeds to repurchase shares. This shifts the weight from Equity to Debt.")
+            st.write("2. **Utilize Tax Shields:** Leverage the interest expense to lower taxable income, effectively letting the government subsidize part of your capital costs.")
+            st.write("3. **Special Dividends:** If no high-ROI projects are available, return the newly borrowed capital to shareholders to boost ROE.")
+        with c2:
+            st.markdown("#### ❌ **STRATEGIC DON'TS (Risk Mitigation)**")
+            st.write("1. **No Secondary Offerings:** Do not issue new shares; this will only dilute ownership and drive WACC higher.")
+            st.write("2. **Avoid High Cash Hoarding:** Keeping large amounts of cash on the balance sheet while debt is low signals poor capital allocation to investors.")
 
-        elif gap < -0.05:
-            st.warning("### RECOMMENDATION: DE-LEVERAGING (DEBT REDUCTION)")
-            st.write(f"The company is currently **Over-leveraged**. The financial risk and the high cost of equity (due to risk) are outweighing the tax benefits of debt.")
-            c_do, c_dont = st.columns(2)
-            with c_do:
-                st.markdown("#### ✅ **Strategic Actions (Do's)**")
-                st.markdown("- **Equity Infusion:** Consider a secondary share offering to raise capital specifically for debt repayment.")
-                st.markdown("- **Retain Earnings:** Temporarily reduce dividend payouts or pause buybacks to strengthen the balance sheet.")
-                st.markdown("- **Asset Divestiture:** Sell off non-core or underperforming business units to pay down high-interest debt tranches.")
-            with c_dont:
-                st.markdown("#### ❌ **Strategic Warnings (Don'ts)**")
-                st.markdown("- **Do Not Refinance with Variable Rates:** In a high-risk state, variable debt exposes the company to dangerous interest rate spikes.")
-                st.markdown("- **Stop Aggressive M&A:** Do not engage in debt-funded acquisitions until the Debt/Equity ratio drops significantly.")
-        else:
-            st.info("### RECOMMENDATION: STABLE MAINTENANCE")
-            st.write("You are operating within the 'Optimal Zone'. Focus on operational growth and cost management.")
+    elif gap < -0.05:
+        st.warning("### STATUS: OVER-LEVERAGED (HIGH FINANCIAL RISK)")
+        st.markdown(f"**Analysis:** The firm's debt level is in the 'Danger Zone'. The risk of bankruptcy or financial distress is causing the Cost of Equity to skyrocket, making the total WACC inefficient.")
+        
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("#### ✅ **STRATEGIC DO'S (Action Plan)**")
+            st.write("1. **Equity Injection:** Consider a rights issue or private placement to raise equity and pay down high-interest debt tranches.")
+            st.write("2. **Asset Rationalization:** Sell non-core assets to generate immediate cash for de-leveraging.")
+            st.markdown("3. **Operational Focus:** Shift management focus toward improving **EBITDA margins** to increase the Interest Coverage Ratio.")
+        with c2:
+            st.markdown("#### ❌ **STRATEGIC DON'TS (Risk Mitigation)**")
+            st.write("1. **No Variable Rate Debt:** Do not take on any debt that isn't fixed-rate; you cannot afford interest rate volatility.")
+            st.write("2. **Pause M&A:** Stop all acquisition activities. Adding more complexity and debt right now could lead to a credit rating downgrade.")
+    else:
+        st.info("### STATUS: OPTIMAL (MAXIMIZING VALUE)")
+        st.write("The company is perfectly positioned. No major financial engineering is required. Continue to monitor market interest rates.")
 
-    # SECTION 4: Sensitivity Table
+    # SECTION 5: Sensitivity Stress Test
     st.markdown("---")
-    st.header("🔍 Sensitivity Stress Test")
-    st.write("How WACC behaves if Market Conditions (Tax & Interest Rates) shift:")
+    st.header("🔍 Macro-Economic Sensitivity Matrix")
+    st.write("This table shows how the **Optimal WACC** would change if the economy shifts (Tax rates vs. Interest rates).")
     rd_range = [base_rd-0.01, base_rd, base_rd+0.01]
     tax_range = [tax-0.05, tax, tax+0.05]
-    res = []
+    res_matrix = []
     for t in tax_range:
         row = []
         for rdb in rd_range:
             lb = unlevered_b * (1 + (1 - t) * (opt_r / (1 - opt_r)))
             w = ((1 - opt_r) * (rf + lb * erp)) + (opt_r * (rdb + opt_r*0.1) * (1 - t))
             row.append(f"{w:.2%}")
-        res.append(row)
-    st.table(pd.DataFrame(res, index=[f"Tax {x:.0%}" for x in tax_range], columns=[f"Base Rd {x:.1%}" for x in rd_range]))
+        res_matrix.append(row)
+    st.table(pd.DataFrame(res_matrix, index=[f"Tax {x:.0%}" for x in tax_range], columns=[f"Base Int. Rate {x:.1%}" for x in rd_range]))
 
 else:
-    st.info("👈 Please load data via the sidebar to generate the Strategic Report.")
+    st.info("👈 Please load data to view the Strategic Report.")
