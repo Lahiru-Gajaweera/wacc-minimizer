@@ -3,17 +3,17 @@ import yfinance as yf
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from fpdf import FPDF
 import tempfile
 import os
-from fpdf import FPDF
 
 # --- 1. Page Config ---
-st.set_page_config(page_title="Strategic WACC Advisor", layout="wide")
-st.title("🛡️ Strategic Capital Structure & WACC Advisor")
+st.set_page_config(page_title="WACC Optimizer", layout="wide")
+st.title("📊 Strategic Capital Structure & WACC Optimizer")
 st.markdown("---")
 
-# --- 2. Sidebar: Data & Controls ---
-st.sidebar.header("📂 Data & Controls")
+# --- 2. Sidebar: Data Acquisition ---
+st.sidebar.header("📂 Data Acquisition")
 source = st.sidebar.radio("Data Source", ["Live API", "Manual CSV Upload"])
 
 if 'fin_data' not in st.session_state:
@@ -22,7 +22,7 @@ if 'fin_data' not in st.session_state:
 if source == "Live API":
     preset = st.sidebar.selectbox("Quick Load", ["Custom", "AAPL", "TSLA", "GOOGL", "MSFT", "NVDA"])
     ticker_input = st.sidebar.text_input("Ticker Symbol", value="" if preset == "Custom" else preset).upper()
-    if st.sidebar.button("🔍 Fetch Data"):
+    if st.sidebar.button("🔍 Fetch Market Data"):
         try:
             s = yf.Ticker(ticker_input); i = s.info
             st.session_state['fin_data'] = {
@@ -37,22 +37,24 @@ else:
         df = pd.read_csv(u)
         c1 = st.sidebar.selectbox("Market Cap Column", df.columns)
         c2 = st.sidebar.selectbox("Debt Column", df.columns)
-        if st.sidebar.button("Analyze Upload"):
+        if st.sidebar.button("🚀 Analyze Data"):
             st.session_state['fin_data'] = {
                 'ticker': "Analysis", 'mkt_cap': float(df[c1].iloc[0]), 
-                'total_debt': float(df[c2].iloc[0]), 'beta': 1.1, 'name': "Financial Report"
+                'total_debt': float(df[c2].iloc[0]), 'beta': 1.1, 'name': "Manual Upload Analysis"
             }
 
-# --- 3. Main Reporting Logic ---
+# --- 3. Main Dashboard ---
 if st.session_state['fin_data']:
     d = st.session_state['fin_data']
     
+    # Financial Assumptions
     st.sidebar.markdown("---")
     tax = st.sidebar.slider("Tax Rate (%)", 0, 40, 25) / 100
     rf = st.sidebar.number_input("Risk-Free Rate", value=0.043)
     erp = st.sidebar.slider("Equity Risk Premium (%)", 3, 9, 5) / 100
-    base_rd = st.sidebar.slider("Base Interest Rate (%)", 2.0, 15.0, 5.0) / 100
+    base_rd = st.sidebar.slider("Base Interest Rate (%)", 2, 15, 5) / 100
 
+    # Math Logic
     total_val = d['mkt_cap'] + d['total_debt']
     curr_dr = d['total_debt'] / total_val
     unlevered_b = d['beta'] / (1 + (1 - tax) * (d['total_debt'] / d['mkt_cap']))
@@ -70,90 +72,104 @@ if st.session_state['fin_data']:
     curr_wacc = wacc_list[np.abs(ratios - curr_dr).argmin()]
     val_gain = ((1/min_w) - (1/curr_wacc)) / (1/curr_wacc)
 
-    # UI: Metrics
+    # UI: Header & Metrics
+    st.header(f"Results for {d['name']}")
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Current WACC", f"{curr_wacc:.2%}")
     m2.metric("Optimal WACC", f"{min_w:.2%}")
-    m3.metric("Optimal Debt Ratio", f"{opt_r:.1%}")
+    m3.metric("Target Debt Ratio", f"{opt_r:.1%}")
     m4.metric("Value Potential", f"{val_gain:+.2%}")
     
+    # UI: Charts (Side-by-Side with Pie reduced in size)
     st.markdown("---")
-    col_strategy, col_chart, col_mix = st.columns([1.2, 2.5, 1.2])
+    col_left, col_right = st.columns([3, 1])
 
-    with col_strategy:
-        st.subheader("📜 Roadmap")
-        gap = opt_r - curr_dr
-        if gap > 0.05:
-            status, desc = "UNDER-LEVERAGED", "Increase debt to capture tax shields."
-            dos, donts = "✅ DO: Issue Bonds / Buybacks", "❌ DON'T: Issue new Equity"
-            st.success(f"### {status}")
-        elif gap < -0.05:
-            status, desc = "OVER-LEVERAGED", "Reduce debt to lower financial risk."
-            dos, donts = "✅ DO: Equity Infusion / Asset Sales", "❌ DON'T: New variable loans"
-            st.warning(f"### {status}")
-        else:
-            status, desc = "OPTIMAL", "Structure is balanced."
-            dos, donts = "✅ DO: Maintain current ratio", "❌ DON'T: Significant shifts"
-            st.info(f"### {status}")
-        
-        st.write(f"**Analysis:** {desc}")
-        st.write(dos)
-        st.write(donts)
+    with col_left:
+        fig_curve, ax_curve = plt.subplots(figsize=(10, 4.5))
+        ax_curve.plot(ratios, wacc_list, color='#1f77b4', linewidth=2.5, label="WACC Curve")
+        ax_curve.axvline(curr_dr, color='orange', linestyle='--', label="Current Mix")
+        ax_curve.axvline(opt_r, color='green', linestyle='-', label="Optimal Mix")
+        ax_curve.set_title("WACC Minimization Analysis")
+        ax_curve.set_xlabel("Debt Ratio")
+        ax_curve.set_ylabel("WACC (%)")
+        ax_curve.legend()
+        st.pyplot(fig_curve)
 
-    with col_chart:
-        # WACC Curve - Forced High Visibility
-        fig_curve, ax_curve = plt.subplots(figsize=(10, 5))
-        ax_curve.plot(ratios, wacc_list, color='#00d4ff', linewidth=3)
-        ax_curve.axvline(curr_dr, color='orange', linestyle='--', linewidth=2, label="Current Mix")
-        ax_curve.axvline(opt_r, color='#39ff14', linestyle='-', linewidth=2, label="Optimal Target")
-        
-        # Fixing text visibility for dark mode
-        plt.rcParams.update({'text.color': "white", 'axes.labelcolor': "white"})
-        ax_curve.set_title("WACC Minimization Curve", fontsize=16, fontweight='bold', color="white")
-        ax_curve.set_ylabel("Cost of Capital (%)", color="white")
-        ax_curve.set_xlabel("Debt Ratio", color="white")
-        ax_curve.tick_params(colors='white')
-        ax_curve.legend(facecolor='#1e1e1e', labelcolor='white')
-        fig_curve.patch.set_alpha(0.0)
-        ax_curve.patch.set_alpha(0.0)
-        st.pyplot(fig_curve, transparent=True)
-        st.caption("**Insight:** The lowest point on this curve represents the maximum efficiency for your capital structure.")
+    with col_right:
+        # Smaller Pie Chart
+        fig_pie, ax_pie = plt.subplots(figsize=(4, 4))
+        ax_pie.pie([d['mkt_cap'], d['total_debt']], labels=['Equity', 'Debt'], autopct='%1.1f%%', startangle=140)
+        ax_pie.set_title("Current Mix")
+        st.pyplot(fig_pie)
 
-    with col_mix:
-        st.subheader("📊 Capital Mix")
-        fig_pie, ax_pie = plt.subplots(figsize=(3, 3))
-        # Better color contrast for the pie
-        ax_pie.pie([d['mkt_cap'], d['total_debt']], labels=['Equity', 'Debt'], autopct='%1.1f%%', colors=['#0077b6', '#cc0000'], textprops={'color':"white"})
-        fig_pie.patch.set_alpha(0.0)
-        st.pyplot(fig_pie, transparent=True)
-        
-        st.markdown(f"""
-        **Composition Description:**
-        Your current debt ratio is **{curr_dr:.1%}**. To reach the optimal point shown on the chart, you should move toward **{opt_r:.1%}**.
-        """)
+    # UI: Strategy Roadmap (All important parts included)
+    st.markdown("---")
+    st.subheader("📜 Strategic Roadmap & Analysis")
+    gap = opt_r - curr_dr
+    if gap > 0.05:
+        status, desc = "UNDER-LEVERAGED", "The firm is not utilizing enough debt. Increasing leverage will create an interest tax shield, effectively lowering the cost of capital and increasing firm value."
+        dos = "Issue long-term debt, use proceeds for share buybacks, and maximize tax-deductible interest expenses."
+        donts = "Avoid issuing new equity or holding large idle cash balances."
+    elif gap < -0.05:
+        status, desc = "OVER-LEVERAGED", "The firm's debt level is exceeding its optimal capacity. High leverage is increasing financial distress risk and driving up the cost of equity."
+        dos = "Prioritize debt repayment, consider an equity infusion, and divest non-core assets to reduce liabilities."
+        donts = "Take on new high-interest debt or engage in aggressive debt-funded expansions."
+    else:
+        status, desc = "OPTIMAL", "The firm's capital structure is at the point where WACC is minimized. No major structural changes are recommended."
+        dos = "Maintain current debt-to-equity targets and focus on operational efficiency."; donts = "Significantly alter the leverage ratio."
 
-    # --- PDF Generator ---
-    def generate_pdf(data, cw, mw, orat, stat, desc, d1, d2, f_curve):
+    st.write(f"**Current Status:** {status}")
+    st.write(f"**Analysis:** {desc}")
+    st.write(f"✅ **Do's:** {dos}")
+    st.write(f"❌ **Don'ts:** {donts}")
+
+    # --- PDF GENERATOR (Full Analysis, No Pie Chart) ---
+    def generate_full_pdf(d, cw, mw, orat, stat, desc, d1, d2, f_curve):
         pdf = FPDF()
         pdf.add_page()
+        
+        # Header
         pdf.set_font("Arial", 'B', 16)
-        pdf.cell(200, 10, f"Analysis: {data['name']}", ln=True, align='C')
+        pdf.cell(200, 10, f"Strategic WACC Report: {d['name']}", ln=True, align='C')
+        pdf.set_font("Arial", '', 10)
+        pdf.cell(200, 10, f"Ticker Reference: {d['ticker']}", ln=True, align='C')
+        pdf.ln(10)
+
+        # Section 1: Metrics
+        pdf.set_font("Arial", 'B', 12)
+        pdf.cell(0, 10, "1. Executive Summary Metrics", ln=True)
+        pdf.set_font("Arial", '', 11)
+        pdf.cell(95, 10, f"Current WACC: {cw:.2%}", border=1)
+        pdf.cell(95, 10, f"Optimal WACC: {mw:.2%}", border=1, ln=True)
+        pdf.cell(95, 10, f"Current Debt Ratio: {curr_dr:.1%}", border=1)
+        pdf.cell(95, 10, f"Target Debt Ratio: {orat:.1%}", border=1, ln=True)
+
+        # Section 2: Strategy
         pdf.ln(10)
         pdf.set_font("Arial", 'B', 12)
-        pdf.cell(0, 10, f"Financial Status: {stat}", ln=True)
+        pdf.cell(0, 10, f"2. Strategic Action Plan: {stat}", ln=True)
         pdf.set_font("Arial", '', 11)
-        pdf.multi_cell(0, 8, f"Summary: {desc}\n{d1}\n{d2}")
-        
+        pdf.multi_cell(0, 8, f"Detailed Analysis: {desc}")
+        pdf.ln(4)
+        pdf.set_text_color(0, 128, 0)
+        pdf.multi_cell(0, 8, f"Recommended Do's: {d1}")
+        pdf.set_text_color(255, 0, 0)
+        pdf.multi_cell(0, 8, f"Warning Don'ts: {d2}")
+        pdf.set_text_color(0, 0, 0)
+
+        # Section 3: WACC Curve
         with tempfile.TemporaryDirectory() as tmpdir:
-            p = os.path.join(tmpdir, "c.png")
-            f_curve.patch.set_facecolor('white') # Reset for PDF
-            f_curve.savefig(p, bbox_inches='tight')
-            pdf.image(p, x=15, w=180)
+            curve_path = os.path.join(tmpdir, "curve.png")
+            f_curve.savefig(curve_path, bbox_inches='tight')
+            pdf.ln(10)
+            pdf.image(curve_path, x=15, w=180)
+            
         return pdf.output(dest='S').encode('latin-1')
 
-    if st.button("📥 Download PDF Report"):
-        pdf_bytes = generate_pdf(d, curr_wacc, min_w, opt_r, status, desc, dos, donts, fig_curve)
-        st.download_button("Save PDF", pdf_bytes, f"Report_{d['ticker']}.pdf", "application/pdf")
+    st.markdown("---")
+    if st.button("📥 Download Full Analysis (PDF)"):
+        pdf_out = generate_full_pdf(d, curr_wacc, min_w, opt_r, status, desc, dos, donts, fig_curve)
+        st.download_button("Click to Download Report", pdf_out, f"WACC_Report_{d['ticker']}.pdf", "application/pdf")
 
 else:
-    st.info("👈 Load data in the sidebar to begin.")
+    st.info("👈 Load a ticker or upload data to begin.")
