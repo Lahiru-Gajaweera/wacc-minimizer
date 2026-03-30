@@ -10,27 +10,13 @@ import os
 # --- 1. Page Config & Custom Blue CSS ---
 st.set_page_config(page_title="Executive WACC Optimizer", layout="wide")
 
-# Corrected parameter: unsafe_allow_html=True
+# Applying a subtle blue theme to the sidebar and buttons
 st.markdown("""
     <style>
-    /* Main title color */
-    h1 {
-        color: #003366;
-    }
-    /* Professional Blue button */
     .stButton>button {
         background-color: #003366;
         color: white;
         border-radius: 5px;
-        border: none;
-    }
-    .stButton>button:hover {
-        background-color: #004d99;
-        color: white;
-    }
-    /* Metric Card Styling */
-    [data-testid="stMetricValue"] {
-        color: #003366;
     }
     .stMetric {
         background-color: #f0f5f9;
@@ -39,7 +25,7 @@ st.markdown("""
         border-left: 5px solid #003366;
     }
     </style>
-    """, unsafe_allow_html=True)
+    """, unsafe_allow_stdio=True)
 
 st.title("🏛️ Strategic Capital Structure & WACC Optimizer")
 st.markdown("---")
@@ -185,33 +171,4 @@ if st.session_state['fin_data']:
         pdf.set_text_color(0, 51, 102)
         pdf.cell(0, 10, f"2. Strategic Roadmap: {stat}", ln=True)
         pdf.set_font("Arial", '', 11)
-        pdf.set_text_color(0, 0, 0)
-        pdf.multi_cell(0, 8, f"Core Analysis: {desc}")
-        pdf.ln(2)
-        pdf.multi_cell(0, 8, f"Actionable Do's: {d1}")
-        pdf.multi_cell(0, 8, f"Critical Don'ts: {d2}")
-
-        # Images
-        with tempfile.TemporaryDirectory() as tmpdir:
-            curve_path = os.path.join(tmpdir, "curve.png")
-            pie_path = os.path.join(tmpdir, "pie.png")
-            f_curve.savefig(curve_path, bbox_inches='tight', dpi=150)
-            f_pie.savefig(pie_path, bbox_inches='tight', dpi=150)
-            
-            pdf.add_page()
-            pdf.set_font("Arial", 'B', 14)
-            pdf.set_text_color(0, 51, 102)
-            pdf.cell(0, 10, "3. Visual Optimization Data", ln=True)
-            pdf.image(curve_path, x=10, w=190)
-            pdf.ln(10)
-            pdf.image(pie_path, x=50, w=110)
-            
-        return pdf.output(dest='S').encode('latin-1')
-
-    st.markdown("---")
-    if st.button("📥 Download Executive Blue Report (PDF)"):
-        pdf_out = generate_full_pdf(d, curr_wacc, min_w, opt_r, status, desc, dos, donts, fig_curve, fig_pie)
-        st.download_button("Save Analysis as PDF", pdf_out, f"Strategic_Report_{d['ticker']}.pdf", "application/pdf")
-
-else:
-    st.info("👈 Please load data via the sidebar to generate your Blue Executive Report.")
+        pdf
