@@ -80,96 +80,92 @@ if st.session_state['fin_data']:
     m3.metric("Target Debt Ratio", f"{opt_r:.1%}")
     m4.metric("Value Potential", f"{val_gain:+.2%}")
     
-    # UI: Charts (Side-by-Side with Pie reduced in size)
+    # UI: Charts (Refined Visibility)
     st.markdown("---")
-    col_left, col_right = st.columns([3, 1])
+    col_left, col_right = st.columns([2.5, 1])
 
     with col_left:
-        fig_curve, ax_curve = plt.subplots(figsize=(10, 4.5))
-        ax_curve.plot(ratios, wacc_list, color='#1f77b4', linewidth=2.5, label="WACC Curve")
-        ax_curve.axvline(curr_dr, color='orange', linestyle='--', label="Current Mix")
-        ax_curve.axvline(opt_r, color='green', linestyle='-', label="Optimal Mix")
-        ax_curve.set_title("WACC Minimization Analysis")
-        ax_curve.set_xlabel("Debt Ratio")
-        ax_curve.set_ylabel("WACC (%)")
-        ax_curve.legend()
+        # High-Contrast WACC Curve
+        plt.style.use('dark_background')
+        fig_curve, ax_curve = plt.subplots(figsize=(10, 5))
+        ax_curve.plot(ratios, wacc_list, color='#00d4ff', linewidth=3, label="WACC Curve")
+        ax_curve.axvline(curr_dr, color='#ff9900', linestyle='--', linewidth=2, label=f"Current Mix ({curr_dr:.1%})")
+        ax_curve.axvline(opt_r, color='#39ff14', linestyle='-', linewidth=2, label=f"Optimal Target ({opt_r:.1%})")
+        
+        ax_curve.set_title("WACC Minimization Analysis", fontsize=14, fontweight='bold', pad=20)
+        ax_curve.set_xlabel("Debt-to-Capital Ratio", fontsize=10)
+        ax_curve.set_ylabel("Cost of Capital (%)", fontsize=10)
+        ax_curve.legend(loc='upper right', frameon=True, facecolor='#262730', edgecolor='white')
+        
+        fig_curve.patch.set_alpha(0.0) # Transparent background for Streamlit
         st.pyplot(fig_curve)
+        st.caption("**Curve Analysis:** The lowest point on the blue line represents the capital structure that maximizes firm value.")
 
     with col_right:
-        # Smaller Pie Chart
+        # High-Contrast Pie
         fig_pie, ax_pie = plt.subplots(figsize=(4, 4))
-        ax_pie.pie([d['mkt_cap'], d['total_debt']], labels=['Equity', 'Debt'], autopct='%1.1f%%', startangle=140)
-        ax_pie.set_title("Current Mix")
+        ax_pie.pie([d['mkt_cap'], d['total_debt']], 
+                   labels=['Equity', 'Debt'], 
+                   autopct='%1.1f%%', 
+                   startangle=140, 
+                   colors=['#1f77b4', '#ff4b4b'],
+                   textprops={'color':"w", 'weight':'bold'})
+        ax_pie.set_title("Current Capital Mix", fontsize=12, fontweight='bold', color='white')
+        fig_pie.patch.set_alpha(0.0)
         st.pyplot(fig_pie)
+        
+        # ADDED DESCRIPTION UNDER PIE
+        st.markdown(f"""
+        **Composition Breakdown:**
+        The firm currently carries **{d['total_debt']/(total_val):.1%}** debt relative to equity. 
+        To reach the optimal cost of capital, a shift towards **{opt_r:.1%}** leverage is recommended.
+        """)
 
-    # UI: Strategy Roadmap (All important parts included)
+    # UI: Strategy Roadmap
     st.markdown("---")
     st.subheader("📜 Strategic Roadmap & Analysis")
     gap = opt_r - curr_dr
     if gap > 0.05:
-        status, desc = "UNDER-LEVERAGED", "The firm is not utilizing enough debt. Increasing leverage will create an interest tax shield, effectively lowering the cost of capital and increasing firm value."
-        dos = "Issue long-term debt, use proceeds for share buybacks, and maximize tax-deductible interest expenses."
+        status, desc = "UNDER-LEVERAGED", "The firm is not utilizing enough debt. Increasing leverage will create an interest tax shield, effectively lowering the cost of capital."
+        dos = "Issue long-term debt, use proceeds for share buybacks."
         donts = "Avoid issuing new equity or holding large idle cash balances."
     elif gap < -0.05:
-        status, desc = "OVER-LEVERAGED", "The firm's debt level is exceeding its optimal capacity. High leverage is increasing financial distress risk and driving up the cost of equity."
-        dos = "Prioritize debt repayment, consider an equity infusion, and divest non-core assets to reduce liabilities."
-        donts = "Take on new high-interest debt or engage in aggressive debt-funded expansions."
+        status, desc = "OVER-LEVERAGED", "The firm's debt level is exceeding its optimal capacity. High leverage is driving up the cost of equity."
+        dos = "Prioritize debt repayment and consider an equity infusion."
+        donts = "Take on new high-interest debt or aggressive expansions."
     else:
-        status, desc = "OPTIMAL", "The firm's capital structure is at the point where WACC is minimized. No major structural changes are recommended."
-        dos = "Maintain current debt-to-equity targets and focus on operational efficiency."; donts = "Significantly alter the leverage ratio."
+        status, desc = "OPTIMAL", "The capital structure is currently balanced for maximum firm value."
+        dos = "Maintain current debt-to-equity targets."; donts = "Significantly alter the leverage ratio."
 
     st.write(f"**Current Status:** {status}")
     st.write(f"**Analysis:** {desc}")
     st.write(f"✅ **Do's:** {dos}")
     st.write(f"❌ **Don'ts:** {donts}")
 
-    # --- PDF GENERATOR (Full Analysis, No Pie Chart) ---
+    # --- PDF GENERATOR ---
     def generate_full_pdf(d, cw, mw, orat, stat, desc, d1, d2, f_curve):
         pdf = FPDF()
         pdf.add_page()
-        
-        # Header
         pdf.set_font("Arial", 'B', 16)
         pdf.cell(200, 10, f"Strategic WACC Report: {d['name']}", ln=True, align='C')
-        pdf.set_font("Arial", '', 10)
-        pdf.cell(200, 10, f"Ticker Reference: {d['ticker']}", ln=True, align='C')
-        pdf.ln(10)
-
-        # Section 1: Metrics
-        pdf.set_font("Arial", 'B', 12)
-        pdf.cell(0, 10, "1. Executive Summary Metrics", ln=True)
-        pdf.set_font("Arial", '', 11)
-        pdf.cell(95, 10, f"Current WACC: {cw:.2%}", border=1)
-        pdf.cell(95, 10, f"Optimal WACC: {mw:.2%}", border=1, ln=True)
-        pdf.cell(95, 10, f"Current Debt Ratio: {curr_dr:.1%}", border=1)
-        pdf.cell(95, 10, f"Target Debt Ratio: {orat:.1%}", border=1, ln=True)
-
-        # Section 2: Strategy
         pdf.ln(10)
         pdf.set_font("Arial", 'B', 12)
-        pdf.cell(0, 10, f"2. Strategic Action Plan: {stat}", ln=True)
+        pdf.cell(0, 10, f"Status: {stat}", ln=True)
         pdf.set_font("Arial", '', 11)
-        pdf.multi_cell(0, 8, f"Detailed Analysis: {desc}")
-        pdf.ln(4)
-        pdf.set_text_color(0, 128, 0)
-        pdf.multi_cell(0, 8, f"Recommended Do's: {d1}")
-        pdf.set_text_color(255, 0, 0)
-        pdf.multi_cell(0, 8, f"Warning Don'ts: {d2}")
-        pdf.set_text_color(0, 0, 0)
-
-        # Section 3: WACC Curve
+        pdf.multi_cell(0, 8, f"Summary: {desc}\n\nRecommended: {d1}\nAvoid: {d2}")
+        
         with tempfile.TemporaryDirectory() as tmpdir:
             curve_path = os.path.join(tmpdir, "curve.png")
+            # Temporarily reset to white for PDF printing
+            f_curve.patch.set_facecolor('white')
             f_curve.savefig(curve_path, bbox_inches='tight')
             pdf.ln(10)
             pdf.image(curve_path, x=15, w=180)
-            
         return pdf.output(dest='S').encode('latin-1')
 
-    st.markdown("---")
-    if st.button("📥 Download Full Analysis (PDF)"):
+    if st.button("📥 Download Analysis (PDF)"):
         pdf_out = generate_full_pdf(d, curr_wacc, min_w, opt_r, status, desc, dos, donts, fig_curve)
-        st.download_button("Click to Download Report", pdf_out, f"WACC_Report_{d['ticker']}.pdf", "application/pdf")
+        st.download_button("Save Report", pdf_out, f"WACC_{d['ticker']}.pdf", "application/pdf")
 
 else:
     st.info("👈 Load a ticker or upload data to begin.")
