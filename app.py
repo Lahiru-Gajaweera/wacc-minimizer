@@ -10,13 +10,27 @@ import os
 # --- 1. Page Config & Custom Blue CSS ---
 st.set_page_config(page_title="Executive WACC Optimizer", layout="wide")
 
-# Applying a subtle blue theme to the sidebar and buttons
+# Corrected parameter: unsafe_allow_html=True
 st.markdown("""
     <style>
+    /* Main title color */
+    h1 {
+        color: #003366;
+    }
+    /* Professional Blue button */
     .stButton>button {
         background-color: #003366;
         color: white;
         border-radius: 5px;
+        border: none;
+    }
+    .stButton>button:hover {
+        background-color: #004d99;
+        color: white;
+    }
+    /* Metric Card Styling */
+    [data-testid="stMetricValue"] {
+        color: #003366;
     }
     .stMetric {
         background-color: #f0f5f9;
@@ -25,7 +39,7 @@ st.markdown("""
         border-left: 5px solid #003366;
     }
     </style>
-    """, unsafe_allow_stdio=True)
+    """, unsafe_allow_html=True)
 
 st.title("🏛️ Strategic Capital Structure & WACC Optimizer")
 st.markdown("---")
